@@ -1,0 +1,242 @@
+# ==============================================================================
+# Production Docker Compose — Drupal 11 + MariaDB (Vector) + Redis Stack
+# ==============================================================================
+# Usage:
+#   cp .env.example .env
+#   docker compose up -d --build
+#
+# Services:
+#   - drupal    : Hardened PHP-Apache runtime with Composer-optimized codebase
+#   - mariadb   : MariaDB 11.x with Vector engine enabled for AI/semantic search
+#   - redis     : Redis Stack (RediSearch, RedisJSON, etc.) for caching/search
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+    labels: "service_name"
+    env: "OS_VERSION"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Drupal Application
+  # ---------------------------------------------------------------------------
+  drupal:
+    build:
+      context: ./drupal
+      dockerfile: Dockerfile
+      args:
+        PHP_VERSION: "${PHP_VERSION}"
+        DEBIAN_VERSION: "${DEBIAN_VERSION}"
+    container_name: drupal-app
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${DRUPAL_HTTP_PORT:-8080}:80"
+    environment:
+      # Drupal site credentials (use Docker Secrets in hardened environments)
+      DB_DRIVER: mysql
+      DB_HOST: mariadb
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-drupal}
+      DB_USER: ${DB_USER:-drupal}
+      DB_PASSWORD: ${DB_PASSWORD:?err DB_PASSWORD is required}
+      DB_PREFIX: ""
+
+      # Redis caching / queue backend
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # Drupal hash salt — rotate per environment (64+ chars recommended)
+      DRUPAL_HASH_SALT: ${DRUPAL_HASH_SALT:?err DRUPAL_HASH_SALT is required}
+
+      # PHP/Apache tuning overrides (optional)
+      PHP_MEMORY_LIMIT: "512M"
+      PHP_UPLOAD_MAX_FILESIZE: "128M"
+
+      # Maintenance mode toggle
+      DRUPAL_MAINTENANCE_MODE: "${DRUPAL_MAINTENANCE_MODE:-false}"
+    volumes:
+      # Persistent user-generated content (must survive container restarts)
+      - drupal-files:/var/www/html/web/sites/default/files
+      - drupal-private:/var/www/html/web/sites/default/private
+      # Config sync directory (if using Configuration Management)
+      - drupal-config:/var/www/html/config/sync
+      # Mount settings.php read-only if externally managed:
+      # - ./drupal/web/sites/default/settings.php:/var/www/html/web/sites/default/settings.php:ro
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "-s",
+          "-o",
+          "/dev/null",
+          "http://localhost:80/index.php",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ---------------------------------------------------------------------------
+  # MariaDB 11.x with Vector Storage
+  # ---------------------------------------------------------------------------
+  mariadb:
+    image: mariadb:${MARIADB_VERSION:-11}
+    container_name: drupal-mariadb
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?err DB_ROOT_PASSWORD is required}
+      MARIADB_DATABASE: ${DB_NAME:-drupal}
+      MARIADB_USER: ${DB_USER:-drupal}
+      MARIADB_PASSWORD: ${DB_PASSWORD:?err DB_PASSWORD is required}
+      # Performance schema for observability (optional overhead)
+      MARIADB_PERFORMANCE_SCHEMA: "${MARIADB_PERFORMANCE_SCHEMA:-OFF}"
+    volumes:
+      # Data persistence
+      - mariadb-data:/var/lib/mysql
+      # Production customizations
+      - ./docker/db/my.cnf:/etc/mysql/conf.d/99-production.cnf:ro
+      # One-time init: enables the Vector engine plugin
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+      # Audit logs
+      - mariadb-logs:/var/log/mysql
+    ports:
+      # Expose only if external tools need direct DB access; otherwise omit
+      - "${DB_EXPOSE_PORT:-127.0.0.1:3306}:3306"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # Resource guardrails — tune to your host capacity
+    deploy:
+      resources:
+        limits:
+          cpus: "${MARIADB_CPU_LIMIT:-2}"
+          memory: "${MARIADB_MEM_LIMIT:-1G}"
+        reservations:
+          cpus: "${MARIADB_CPU_RESERVE:-0.5}"
+          memory: "${MARIADB_MEM_RESERVE:-256M}"
+
+  # ---------------------------------------------------------------------------
+  # Redis Stack Server (RediSearch, RedisJSON, RedisBloom, etc.)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis/redis-stack-server:${REDIS_VERSION:-latest}
+    container_name: drupal-redis
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      # redis-stack-server respects REDIS_ARGS for extra flags
+      REDIS_ARGS: >-
+        --requirepass ${REDIS_PASSWORD:-}
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory ${REDIS_MAXMEMORY:-512mb}
+        --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+      # Uncomment to enforce stricter baseline config:
+      # - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      # Bind to localhost only to prevent unauthorized remote access
+      - "${REDIS_EXPOSE_PORT:-127.0.0.1:6379}:6379"
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    sysctls:
+      - net.core.somaxconn=65535
+    deploy:
+      resources:
+        limits:
+          cpus: "${REDIS_CPU_LIMIT:-1}"
+          memory: "${REDIS_MEM_LIMIT:-512M}"
+        reservations:
+          cpus: "${REDIS_CPU_RESERVE:-0.25}"
+          memory: "${REDIS_MEM_RESERVE:-128M}"
+
+  # ---------------------------------------------------------------------------
+  # phpMyAdmin — Database administration
+  # ---------------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin:${PHPMYADMIN_VERSION:-latest}
+    container_name: drupal-phpmyadmin
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      PMA_HOST: mariadb
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?err DB_ROOT_PASSWORD is required}
+      UPLOAD_LIMIT: "${PMA_UPLOAD_LIMIT:-128M}"
+      MEMORY_LIMIT: "${PMA_MEMORY_LIMIT:-512M}"
+      MAX_EXECUTION_TIME: "${PMA_MAX_EXECUTION_TIME:-600}"
+    ports:
+      - "${PHPMYADMIN_PORT:-127.0.0.1:8081}:80"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: "512M"
+        reservations:
+          cpus: "0.1"
+          memory: "128M"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+    labels:
+      - "com.drupal.environment=production"
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  drupal-files:
+    driver: local
+  drupal-private:
+    driver: local
+  drupal-config:
+    driver: local
+  mariadb-data:
+    driver: local
+  mariadb-logs:
+    driver: local
+  redis-data:
+    driver: local

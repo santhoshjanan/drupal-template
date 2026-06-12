@@ -1,0 +1,84 @@
+# ==============================================================================
+# .graphifyignore — Files/paths to skip when building knowledge graphs
+# Mirrors .gitignore logic but tuned for code understanding (not version control).
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Dependencies (too much noise, no semantic value)
+# ------------------------------------------------------------------------------
+drupal/vendor/
+node_modules/
+
+# ------------------------------------------------------------------------------
+# Generated / Cache files (derived from source, not primary knowledge)
+# ------------------------------------------------------------------------------
+drupal/web/sites/*/files/php/
+drupal/web/sites/*/files/css/
+drupal/web/sites/*/files/js/
+drupal/web/sites/*/files/languages/
+drupal/web/sites/*/files/styles/
+drupal/web/sites/*/files/translations/
+drupal/web/sites/*/files/config_*/
+
+# Drupal config export (redundant with module code)
+drupal/config/sync/*.yml
+
+# ------------------------------------------------------------------------------
+# Binary / Media / Data dumps (not code)
+# ------------------------------------------------------------------------------
+drupal/web/sites/*/files/*.jpg
+drupal/web/sites/*/files/*.jpeg
+drupal/web/sites/*/files/*.png
+drupal/web/sites/*/files/*.gif
+drupal/web/sites/*/files/*.svg
+drupal/web/sites/*/files/*.pdf
+drupal/web/sites/*/files/*.mp3
+drupal/web/sites/*/files/*.mp4
+drupal/web/sites/*/files/*.zip
+drupal/web/sites/*/files/*.tar.gz
+
+*.sql
+*.dump
+*.dump.gz
+*.sqlite
+*.sqlite3
+
+# ------------------------------------------------------------------------------
+# Environment & Secrets (noise, potentially sensitive)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# ------------------------------------------------------------------------------
+# Docker runtime (not application logic)
+# ------------------------------------------------------------------------------
+docker-compose.override.yml
+*.override.yml
+
+# ------------------------------------------------------------------------------
+# graphify outputs (avoid recursive ingestion)
+# ------------------------------------------------------------------------------
+graphify-out/
+graph.json
+GRAPH_REPORT.md
+*.graphml
+*.svg
+
+# ------------------------------------------------------------------------------
+# Logs (transient)
+# ------------------------------------------------------------------------------
+*.log
+logs/
+mariadb-logs/
+
+# ------------------------------------------------------------------------------
+# OS & IDE
+# ------------------------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

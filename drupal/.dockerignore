@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Editor configs
+.editorconfig
+.idea
+.vscode
+*.swp
+*.swo
+
+# Documentation
+README.md
+LICENSE.txt
+INSTALL.txt
+
+# Local env files
+.env
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Node / build artifacts (if any)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Temporary / cache files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Tests
+phpunit.xml*
+tests/
+
+# Backup files
+*~
+*.bak
+*.orig

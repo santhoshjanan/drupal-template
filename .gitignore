@@ -1,0 +1,124 @@
+# ==============================================================================
+# .gitignore — Drupal + Docker Stack
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Environment & Secrets (NEVER commit these)
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+!.env.example
+*.pem
+*.key
+*.crt
+
+# ------------------------------------------------------------------------------
+# Docker
+# ------------------------------------------------------------------------------
+docker-compose.override.yml
+*.override.yml
+
+# ------------------------------------------------------------------------------
+# Drupal — Runtime-generated files
+# ------------------------------------------------------------------------------
+# User-uploaded content (persistent via volume, not Git)
+drupal/web/sites/default/files/
+drupal/web/sites/default/private/
+drupal/web/sites/default/settings.php
+drupal/web/sites/default/settings.*.php
+!drupal/web/sites/default/default.settings.php
+!drupal/web/sites/default/default.services.yml
+
+# Config sync directory (managed via drush cex/cim, optional in Git)
+drupal/config/sync/*.yml
+
+# Drupal caches / temp (if ever generated on host)
+drupal/web/sites/*/files/php/
+drupal/web/sites/*/files/css/
+drupal/web/sites/*/files/js/
+drupal/web/sites/*/files/languages/
+drupal/web/sites/*/files/styles/
+drupal/web/sites/*/files/translations/
+drupal/web/sites/*/files/config_*/
+
+# ------------------------------------------------------------------------------
+# Composer (if running locally outside Docker)
+# ------------------------------------------------------------------------------
+drupal/vendor/
+drupal/composer.phar
+
+# ------------------------------------------------------------------------------
+# Node / Frontend build artifacts
+# ------------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log
+
+# Build outputs
+*.map
+build/
+dist/
+
+# ------------------------------------------------------------------------------
+# IDEs & Editors
+# ------------------------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.save
+
+# ------------------------------------------------------------------------------
+# OS generated
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# ------------------------------------------------------------------------------
+# Logs & Databases
+# ------------------------------------------------------------------------------
+*.log
+logs/
+*.sql
+*.sqlite
+*.sqlite3
+*.dump
+*.dump.gz
+
+# ------------------------------------------------------------------------------
+# Test & Coverage artifacts
+# ------------------------------------------------------------------------------
+phpunit.xml
+coverage/
+.phpunit.result.cache
+
+# ------------------------------------------------------------------------------
+# graphify outputs (if you run /graphify locally)
+# ------------------------------------------------------------------------------
+graphify-out/
+graph.json
+GRAPH_REPORT.md
+*.graphml
+*.svg
+
+# ------------------------------------------------------------------------------
+# Misc
+# ------------------------------------------------------------------------------
+*.tar.gz
+*.zip
+*.tgz
+*.bz2
+tmp/
+temp/

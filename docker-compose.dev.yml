@@ -1,0 +1,46 @@
+# ==============================================================================
+# Development Override — Live-reload source code without rebuilding the image
+# ==============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# This merges with the base docker-compose.yml and adds host bind-mounts
+# so edits in your IDE are reflected immediately in the container.
+# ==============================================================================
+
+services:
+  drupal:
+    # In dev we use the same image; only restart the container to pick up changes.
+    image: extrag-drupal          # reuse the already-built production image
+    volumes:
+      # --- Live source code mounts -------------------------------------------
+      - ./drupal/web:/var/www/html/web
+      - ./drupal/vendor:/var/www/html/vendor
+      - ./drupal/composer.json:/var/www/html/composer.json:ro
+      - ./drupal/composer.lock:/var/www/html/composer.lock:ro
+      # --- Dev PHP settings (display_errors, opcache timestamps, etc.) ------
+      - ./drupal/config/php/development.ini:/usr/local/etc/php/conf.d/98-development.ini:ro
+      # --- Writable dirs (named volumes keep perms correct inside container) -
+      - drupal-files:/var/www/html/web/sites/default/files
+      - drupal-private:/var/www/html/web/sites/default/private
+      - drupal-config:/var/www/html/config/sync
+    environment:
+      # Make PHP scream in dev so errors land in browser & logs
+      PHP_DISPLAY_ERRORS: "1"
+      PHP_ERROR_REPORTING: "E_ALL"
+      # Optional: toggle maintenance mode without editing .env
+      DRUPAL_MAINTENANCE_MODE: "${DRUPAL_MAINTENANCE_MODE:-false}"
+    # Fast dev entrypoint: skip the slow find/chmod crawl, just boot Apache.
+    # The base image’s entrypoint still handles DB wait & mkdirs.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[dev-entrypoint] Fast-starting Drupal in development mode..."
+        mkdir -p /var/www/html/web/sites/default/files
+        mkdir -p /var/www/html/web/sites/default/private
+        chown -R www-data:www-data /var/www/html/web/sites/default/files || true
+        chown -R www-data:www-data /var/www/html/web/sites/default/private || true
+        exec /usr/local/bin/docker-entrypoint.sh apache2-foreground
+    # Optional: forward Xdebug port if you install/enable xdebug later
+    # ports:
+    #   - "${XDEBUG_PORT:-9003}:9003"
